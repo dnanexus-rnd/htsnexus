@@ -4,7 +4,7 @@ set -o pipefail
 cd "${HTSNEXUS_HOME}"
 source test/bash-tap-bootstrap
 
-plan tests 69
+plan tests 76
 
 # use htsnexus_index_bam to build the test database
 DBFN="${TMPDIR}/htsnexus_integration_test.db"
@@ -73,6 +73,10 @@ is "$?" "0" "index local BAM unplaced reads slice"
 is "$($samtools view "$BAMFN" | awk "\$3 == \"*\" {print;}" | wc -l)" "12475" "read BAM unplaced reads - exact record count"
 
 is "$($samtools view -H "$BAMFN" | wc -l)" "103" "BAM header in slice"
+
+output=$(client/htsnexus.py -s http://localhost:48444/v1/reads --header-only htsnexus_test NA12878 | $samtools view -c -)
+is "$?" "0" "read BAM header only"
+is "$output" "0" "read BAM header only"
 
 output=$(client/htsnexus.py -s http://localhost:48444/v1/reads -r 21 htsnexus_test NA12878 | $samtools view -c -)
 is "$?" "0" "read BAM empty range slice"
@@ -145,6 +149,10 @@ is "$($samtools view "$CRAMFN" | awk "\$3 == \"*\" {print;}" | wc -l)" "12475" "
 
 is "$($samtools view -H "$CRAMFN" | wc -l)" "103" "CRAM header in slice"
 
+output=$(client/htsnexus.py -s http://localhost:48444/v1/reads --header-only htsnexus_test NA12878 cram | $samtools view -c -)
+is "$?" "0" "read CRAM header only"
+is "$output" "0" "read CRAM header only"
+
 output=$(client/htsnexus.py -s http://localhost:48444/v1/reads -r 21 htsnexus_test NA12878 cram | $samtools view -c -)
 is "$?" "0" "read CRAM empty range slice"
 is "$output" "0" "read CRAM empty range slice"
@@ -182,3 +190,8 @@ client/htsnexus.py -v -s http://localhost:48444/v1/variants -r 20 htsnexus_test 
 is "$?" "0" "read VCF empty range slice"
 is "$(cat "${VCFFN}" | wc -l)" "253" "read VCF empty range slice - line count"
 is "$(egrep -v "^#" "${VCFFN}" | wc -l)" "0" "read VCF empty range slice - record count"
+
+client/htsnexus.py -v -s http://localhost:48444/v1/variants --header-only htsnexus_test 1000genomes VCF | gzip -dc > "$VCFFN"
+is "$?" "0" "read VCF header only"
+is "$(cat "${VCFFN}" | wc -l)" "253" "read VCF header only - line count"
+is "$(egrep -v "^#" "${VCFFN}" | wc -l)" "0" "read VCF header only - record count"

@@ -66,59 +66,86 @@ class HTSRoutes {
             ans.urls[0].headers.range = "bytes=" + 0 + "-" + (info.file_size-1);
         }
 
-        // genomic range slicing
-        if (request.query.referenceName) {
-            let genomicRange = resolveGenomicRange(request.query);
+        if (request.query['class'] !== undefined || request.query.referenceName) {
+            // client wants something more specific than the entire file; try to comply
 
             // query for index metadata (will fail if we don't have the file indexed)
             let meta = this.db.get("select htsfiles._dbid, reference, slice_prefix, slice_suffix from htsfiles, htsfiles_blocks_meta where htsfiles._dbid = htsfiles_blocks_meta._dbid and format = ? and namespace = ? and accession = ?",
                                     format, ans.namespace, ans.accession, _);
-            if (!meta) {
-                throw new Errors.Unable("No genomic range index available for the requested file.");
-            }
-            ans.reference = meta.reference;
+            if (meta) {
+                ans.reference = meta.reference;
 
-            // Calculate the byte range of BGZF blocks overlapping the query
-            // genomic range. The query probably has to scan index entries for
-            // all blocks in the file. In the future, we could implement a
-            // more efficient indexing strategy, such as UCSC binning, perhaps
-            // using SQL views.
-            let rslt;
-            if (genomicRange.seq !== '*') {
-                rslt = this.db.get("select count(*), min(byteLo), max(byteHi) from htsfiles_blocks where _dbid = ? and seq = ? and not (seqLo > ? or seqHi < ?)",
-                                   meta._dbid, genomicRange.seq, genomicRange.hi, genomicRange.lo, _);
-            } else {
-                // unmapped reads
-                rslt = this.db.get("select count(*), min(byteLo), max(byteHi) from htsfiles_blocks where _dbid = ? and seq is null",
-                                   meta._dbid, _);
-            }
+                if (request.query['class'] === "header" && meta.slice_prefix !== null) {
+                    // client only wants the header, which we can supply efficiently
+                    ans.urls = [{
+                        url: "data:application/octet-stream;base64," + meta.slice_prefix.toString('base64'),
+                        class: "header"
+                    }];
+                    if (meta.slice_suffix !== null) {
+                        ans.urls.push({
+                            url: "data:application/octet-stream;base64," + meta.slice_suffix.toString('base64'),
+                            class: "body"
+                        });
+                    }
+                } else if (request.query.referenceName) {
+                    // genomic range slicing
+                    let genomicRange = resolveGenomicRange(request.query);
 
-            if (rslt['count(*)']>0) {
-                let lo = rslt['min(byteLo)'];
-                let hi = rslt['max(byteHi)'];
-                assert(lo >= 0 && hi > lo);
-                // formulate HTTP byte range header (fully closed)
-                ans.urls[0].headers.range = "bytes=" + lo + "-" + (hi-1);
-            } else {
-                // empty result set
-                ans.urls = [];
-            }
+                    // Calculate the byte range of BGZF blocks overlapping the query
+                    // genomic range. The query probably has to scan index entries for
+                    // all blocks in the file. In the future, we could implement a
+                    // more efficient indexing strategy, such as UCSC binning, perhaps
+                    // using SQL views.
+                    let rslt;
+                    if (genomicRange.seq !== '*') {
+                        rslt = this.db.get("select count(*), min(byteLo), max(byteHi) from htsfiles_blocks where _dbid = ? and seq = ? and not (seqLo > ? or seqHi < ?)",
+                                        meta._dbid, genomicRange.seq, genomicRange.hi, genomicRange.lo, _);
+                    } else {
+                        // unmapped reads
+                        rslt = this.db.get("select count(*), min(byteLo), max(byteHi) from htsfiles_blocks where _dbid = ? and seq is null",
+                                        meta._dbid, _);
+                    }
 
-            // TODO: handle block_prefix too. it'll be slightly tricky to get
-            // block_prefix and block_suffix from the above aggregation query.
-            // http://stackoverflow.com/a/17319622
-            if (meta.slice_prefix !== null && request.query['noHeaderPrefix'] === undefined) {
-                ans.urls.unshift({url: "data:application/octet-stream;base64," + meta.slice_prefix.toString('base64')});
-            }
+                    if (rslt['count(*)']>0) {
+                        let lo = rslt['min(byteLo)'];
+                        let hi = rslt['max(byteHi)'];
+                        assert(lo >= 0 && hi > lo);
+                        // formulate HTTP byte range header (fully closed)
+                        ans.urls[0].headers.range = "bytes=" + lo + "-" + (hi-1);
+                    } else {
+                        // empty result set
+                        ans.urls = [];
+                    }
 
-            // TODO: handle block_suffix as well.
-            if (meta.slice_suffix !== null) {
-                ans.urls.push({url: "data:application/octet-stream;base64," + meta.slice_suffix.toString('base64')});
+                    if (meta.slice_prefix !== null) {
+                        if (ans.urls.length === 1) {
+                            ans.urls[0].class = "body";
+                        }
+                        if (request.query['class'] !== "body") {
+                            ans.urls.unshift({
+                                url: "data:application/octet-stream;base64," + meta.slice_prefix.toString('base64'),
+                                class: "header"
+                            });
+                        }
+
+                        // TODO: handle block_prefix too. it'll be slightly tricky to get
+                        // block_prefix and block_suffix from the above aggregation query.
+                        // http://stackoverflow.com/a/17319622
+                    }
+
+                    // TODO: handle block_suffix as well.
+                    if (meta.slice_suffix !== null) {
+                        ans.urls.push({
+                            url: "data:application/octet-stream;base64," + meta.slice_suffix.toString('base64'),
+                            class: "body"
+                        });
+                    }
+
+                    // TODO: decompose the byte range into 1GB (or whatever) chunks, to help
+                    // clients retry & resume
+                }
             }
         }
-
-        // TODO: decompose the byte range into 1GB (or whatever) chunks, to help
-        // clients retry & resume
 
         return {htsget: ans};
     }

@@ -25,7 +25,7 @@ def genomic_range_query_string(genomic_range):
 # In particular the ticket will specify a URL at which the desired data can be
 # accessed (possibly with a byte range and auth headers).
 def get_ticket(namespace, accession, format, server=DEFAULT_SERVER, token=None, genomic_range=None,
-               verbose=False, insecure=False):
+               header_only=False, verbose=False, insecure=False):
     # rewrite server endpoint for variants: a temporary hack so that this client
     # can continue to address the other GA4GH prototype servers while we talk
     # about how the URL endpoints should look.
@@ -37,6 +37,8 @@ def get_ticket(namespace, accession, format, server=DEFAULT_SERVER, token=None, 
     query_url = query_url + "?format=" + urllib.quote(format)
     if genomic_range:
         query_url = query_url + '&' + genomic_range_query_string(genomic_range)
+    if header_only:
+        query_url = query_url + '&class=header'
     if verbose:
         print >>sys.stderr, ('Query URL: ' + query_url)
     query_headers = {}
@@ -102,6 +104,7 @@ def main():
     parser = argparse.ArgumentParser(description='htsnexus streaming client', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument('-s','--server', metavar='URL', type=str, default=DEFAULT_SERVER, help='htsnexus server endpoint')
     parser.add_argument('-r','--range', metavar='RANGE', type=str, help='target genomic range, seq:lo-hi or just seq')
+    parser.add_argument('--header-only', action="store_true", help='request the BAM/CRAM/VCF header only')
     parser.add_argument('-t','--token', metavar='XXXX', type=str, help='API auth token')
     parser.add_argument('-v', '--verbose', action='store_true', help='verbose log to standard error')
     parser.add_argument('-k', '--insecure', action='store_true', help='disable TLS certificate verification')
@@ -112,8 +115,8 @@ def main():
     args.format = args.format.upper()
 
     return get(args.namespace, args.accession, args.format, server=args.server,
-               token=args.token, genomic_range=args.range, verbose=args.verbose,
-               insecure=args.insecure)
+               token=args.token, genomic_range=args.range, header_only=args.header_only,
+               verbose=args.verbose, insecure=args.insecure)
 
 if __name__ == '__main__':
    main()

@@ -58,6 +58,7 @@ describe("Server", function() {
             expect(res.headers['access-control-allow-origin']).to.be('https://www.dnanexus.com');
             expect(res.body.urls.length).to.be(1);
             expect(res.body.urls[0].url).to.be.a('string');
+            expect(res.body.urls[0].class).to.be(undefined);
             expect(res.body.format).to.be('BAM');
 
             // explicit format
@@ -66,6 +67,7 @@ describe("Server", function() {
             expect(res.headers['access-control-allow-origin']).to.be('https://www.dnanexus.com');
             expect(res.body.urls.length).to.be(1);
             expect(res.body.urls[0].url).to.be.a('string');
+            expect(res.body.urls[0].class).to.be(undefined);
             expect(res.body.format).to.be('BAM');
         });
 
@@ -82,6 +84,7 @@ describe("Server", function() {
             expect(res.body.urls[1].url).to.be.a('string');
             expect(res.body.urls[1].url).to.match(/http.*/);
             expect(res.body.urls[1].headers.range).to.be("bytes=977196-1165272");
+            expect(res.body.urls[1].class).to.be("body");
             expect(res.body.reference).to.be('GRCh37');
             expect(res.body.format).to.be('BAM');
 
@@ -90,6 +93,7 @@ describe("Server", function() {
             let buf = new Buffer(res.body.urls[0].url.substring(res.body.urls[0].url.indexOf(',')+1), 'base64');
             expect(buf[0]).to.be(0x1f);
             expect(buf[1]).to.be(0x8b);
+            expect(res.body.urls[0].class).to.be("header");
 
             expect(res.body.urls[2].url).to.be.a('string');
             expect(res.body.urls[2].url).to.match(/data:.*/);
@@ -97,6 +101,7 @@ describe("Server", function() {
             expect(buf[0]).to.be(0x1f);
             expect(buf[1]).to.be(0x8b);
             expect(buf.length).to.be(28);
+            expect(res.body.urls[2].class).to.be("body");
 
             res = req("/reads/htsnexus_test/NA12878?format=BAM&referenceName=20&start=5000000&end=6020000", _);
             expect(res.body.urls.length).to.be(3);
@@ -104,7 +109,7 @@ describe("Server", function() {
         });
 
         it("should suppress BAM header slice prefix on request", function(_) {
-            let res = req("/reads/htsnexus_test/NA12878?referenceName=20&start=6000000&end=6020000&noHeaderPrefix", _);
+            let res = req("/reads/htsnexus_test/NA12878?referenceName=20&start=6000000&end=6020000&class=body", _);
             expect(res.statusCode).to.be(200);
             expect(res.body.urls.length).to.be(2);
             expect(res.body.urls[0].url).to.be.a('string');
@@ -114,6 +119,25 @@ describe("Server", function() {
             expect(res.body.reference).to.be('GRCh37');
         });
 
+        it("should provide BAM header-only on request", function(_) {
+            let res = req("/reads/htsnexus_test/NA12878?referenceName=20&start=6000000&end=6020000&class=header", _);
+            expect(res.statusCode).to.be(200);
+            expect(res.body.urls.length).to.be(2);
+            expect(res.body.urls[0].url).to.be.a('string');
+            expect(res.body.urls[0].url).to.match(/data:.*/);
+            let buf = new Buffer(res.body.urls[0].url.substring(res.body.urls[0].url.indexOf(',')+1), 'base64');
+            expect(buf[0]).to.be(0x1f);
+            expect(buf[1]).to.be(0x8b);
+            expect(res.body.urls[0].class).to.be("header");
+            expect(res.body.urls[1].url).to.be.a('string');
+            expect(res.body.urls[1].url).to.match(/data:.*/);
+            expect(res.body.urls[1].class).to.be("body");
+            buf = new Buffer(res.body.urls[1].url.substring(res.body.urls[1].url.indexOf(',')+1), 'base64');
+            expect(buf[0]).to.be(0x1f);
+            expect(buf[1]).to.be(0x8b);
+            expect(buf.length).to.be(28);
+        });
+
         it("should serve the byte range for a whole reference sequence", function(_) {
             let res = req("/reads/htsnexus_test/NA12878?referenceName=20", _);
             expect(res.statusCode).to.be(200);
@@ -121,6 +145,7 @@ describe("Server", function() {
             expect(res.body.urls[1].url).to.be.a('string');
             expect(res.body.urls[1].url).to.match(/http.*/);
             expect(res.body.urls[1].headers.range).to.be("bytes=977196-2128165");
+            expect(res.body.urls[1].class).to.be("body");
             expect(res.body.format).to.be('BAM');
             expect(res.body.reference).to.be('GRCh37');
 
@@ -129,9 +154,11 @@ describe("Server", function() {
             let buf = new Buffer(res.body.urls[0].url.substring(res.body.urls[0].url.indexOf(',')+1), 'base64');
             expect(buf[0]).to.be(0x1f);
             expect(buf[1]).to.be(0x8b);
+            expect(res.body.urls[0].class).to.be("header");
 
             expect(res.body.urls[2].url).to.be.a('string');
             expect(res.body.urls[2].url).to.match(/data:.*/);
+            expect(res.body.urls[2].class).to.be("body");
             buf = new Buffer(res.body.urls[2].url.substring(res.body.urls[2].url.indexOf(',')+1), 'base64');
             expect(buf[0]).to.be(0x1f);
             expect(buf[1]).to.be(0x8b);
@@ -144,6 +171,7 @@ describe("Server", function() {
             expect(res.body.urls.length).to.be(3);
             expect(res.body.urls[1].url).to.be.a('string');
             expect(res.body.urls[1].url).to.match(/http.*/);
+            expect(res.body.urls[1].class).to.be("body");
             expect(res.body.urls[1].headers.range).to.be("bytes=2112141-2596770");
             expect(res.body.format).to.be('BAM');
             expect(res.body.reference).to.be('GRCh37');
@@ -153,9 +181,11 @@ describe("Server", function() {
             let buf = new Buffer(res.body.urls[0].url.substring(res.body.urls[0].url.indexOf(',')+1), 'base64');
             expect(buf[0]).to.be(0x1f);
             expect(buf[1]).to.be(0x8b);
+            expect(res.body.urls[0].class).to.be("header");
 
             expect(res.body.urls[2].url).to.be.a('string');
             expect(res.body.urls[2].url).to.match(/data:.*/);
+            expect(res.body.urls[2].class).to.be("body");
             buf = new Buffer(res.body.urls[2].url.substring(res.body.urls[2].url.indexOf(',')+1), 'base64');
             expect(buf[0]).to.be(0x1f);
             expect(buf[1]).to.be(0x8b);
@@ -176,6 +206,7 @@ describe("Server", function() {
             let buf = new Buffer(res.body.urls[0].url.substring(res.body.urls[0].url.indexOf(',')+1), 'base64');
             expect(buf[0]).to.be(0x1f);
             expect(buf[1]).to.be(0x8b);
+            expect(res.body.urls[0].class).to.be("header");
 
             expect(res.body.urls[1].url).to.be.a('string');
             expect(res.body.urls[1].url).to.match(/data:.*/);
@@ -183,6 +214,7 @@ describe("Server", function() {
             expect(buf[0]).to.be(0x1f);
             expect(buf[1]).to.be(0x8b);
             expect(buf.length).to.be(28);
+            expect(res.body.urls[1].class).to.be("body");
 
             res = req("/reads/htsnexus_test/NA12878?referenceName=XXX", _);
             expect(res.statusCode).to.be(200);
@@ -193,6 +225,7 @@ describe("Server", function() {
             buf = new Buffer(res.body.urls[0].url.substring(res.body.urls[0].url.indexOf(',')+1), 'base64');
             expect(buf[0]).to.be(0x1f);
             expect(buf[1]).to.be(0x8b);
+            expect(res.body.urls[0].class).to.be("header");
 
             expect(res.body.urls[1].url).to.be.a('string');
             expect(res.body.urls[1].url).to.match(/data:.*/);
@@ -200,6 +233,7 @@ describe("Server", function() {
             expect(buf[0]).to.be(0x1f);
             expect(buf[1]).to.be(0x8b);
             expect(buf.length).to.be(28);
+            expect(res.body.urls[1].class).to.be("body");
         });
 
         it("should reject invalid ranges", function(_) {
@@ -207,9 +241,14 @@ describe("Server", function() {
             expect(req("/reads/htsnexus_test/NA12878?referenceName=20&start=2&end=1", _).statusCode).to.be(422);
         });
 
-        it("should report Unable to range-query an unindexed BAM", function(_) {
+        it("should ignore range query for an unindexed BAM", function(_) {
             let res = req("/reads/ENCODE/ENCFF621SXE?referenceName=1", _);
-            expect(res.statusCode).to.be(406);
+            expect(res.statusCode).to.be(200);
+            expect(res.headers['access-control-allow-origin']).to.be('https://www.dnanexus.com');
+            expect(res.body.urls.length).to.be(1);
+            expect(res.body.urls[0].url).to.be.a('string');
+            expect(res.body.urls[0].class).to.be(undefined);
+            expect(res.body.format).to.be('BAM');
         });
 
         it("should redirect to Heng Li's bamsvr", function(_) {
@@ -237,6 +276,7 @@ describe("Server", function() {
             expect(res.body.urls.length).to.be(1);
             expect(res.body.urls[0].url).to.be.a('string');
             expect(res.body.urls[0].url).to.match(/http.*/);
+            expect(res.body.urls[0].class).to.be(undefined);
             expect(res.body.urls[0].headers.range).to.be("bytes=0-1661525");
             expect(res.body.format).to.be('CRAM');
         });
@@ -247,6 +287,7 @@ describe("Server", function() {
             expect(res.body.urls.length).to.be(3);
             expect(res.body.urls[1].url).to.be.a('string');
             expect(res.body.urls[1].url).to.match(/http.*/);
+            expect(res.body.urls[1].class).to.be("body");
             expect(res.body.urls[1].headers.range).to.be("bytes=617115-1094992");
             expect(res.body.format).to.be('CRAM');
             expect(res.body.reference).to.be('GRCh37');
@@ -255,6 +296,7 @@ describe("Server", function() {
             expect(res.body.urls[0].url).to.match(/data:.*/);
             let buf = new Buffer(res.body.urls[0].url.substring(res.body.urls[0].url.indexOf(',')+1), 'base64');
             expect(buf.slice(0,4).toString()).to.be('CRAM');
+            expect(res.body.urls[0].class).to.be("header");
 
             expect(res.body.urls[2].url).to.be.a('string');
             expect(res.body.urls[2].url).to.match(/data:.*/);
@@ -262,6 +304,7 @@ describe("Server", function() {
             expect(buf[0]).to.be(0x0f);
             expect(buf[1]).to.be(0x00);
             expect(buf.length).to.be(38);
+            expect(res.body.urls[2].class).to.be("body");
 
             res = req("/reads/htsnexus_test/NA12878?format=CRAM&referenceName=20&start=5000000&end=6020000", _);
             expect(res.body.urls.length).to.be(3);
@@ -269,15 +312,35 @@ describe("Server", function() {
         });
 
         it("should suppress CRAM header slice prefix on request", function(_) {
-            let res = req("/reads/htsnexus_test/NA12878?format=CRAM&referenceName=20&start=6000000&end=6020000&noHeaderPrefix", _);
+            let res = req("/reads/htsnexus_test/NA12878?format=CRAM&referenceName=20&start=6000000&end=6020000&class=body", _);
             expect(res.statusCode).to.be(200);
             expect(res.body.urls.length).to.be(2);
             expect(res.body.urls[0].url).to.be.a('string');
             expect(res.body.urls[0].url).to.match(/http.*/);
             expect(res.body.urls[0].headers.range).to.be("bytes=617115-1094992");
+            expect(res.body.urls[0].class).to.be("body");
             expect(res.body.format).to.be('CRAM');
             expect(res.body.reference).to.be('GRCh37');
         });
+
+        it("should provide CRAM header-only on request", function(_) {
+            let res = req("/reads/htsnexus_test/NA12878?format=CRAM&referenceName=20&start=6000000&end=6020000&class=header", _);
+            expect(res.statusCode).to.be(200);
+            expect(res.body.urls.length).to.be(2);
+            expect(res.body.urls[0].url).to.be.a('string');
+            expect(res.body.urls[0].url).to.match(/data:.*/);
+            let buf = new Buffer(res.body.urls[0].url.substring(res.body.urls[0].url.indexOf(',')+1), 'base64');
+            expect(buf.slice(0,4).toString()).to.be('CRAM');
+            expect(res.body.urls[0].class).to.be("header");
+            expect(res.body.urls[1].url).to.be.a('string');
+            expect(res.body.urls[1].url).to.match(/data:.*/);
+            expect(res.body.urls[1].class).to.be("body");
+            buf = new Buffer(res.body.urls[1].url.substring(res.body.urls[1].url.indexOf(',')+1), 'base64');
+            expect(buf[0]).to.be(0x0f);
+            expect(buf[1]).to.be(0x00);
+            expect(buf.length).to.be(38);
+        });
+
 
         it("should serve the byte range for a whole reference sequence", function(_) {
             let res = req("/reads/htsnexus_test/NA12878?format=CRAM&referenceName=20", _);
@@ -285,6 +348,7 @@ describe("Server", function() {
             expect(res.body.urls.length).to.be(3);
             expect(res.body.urls[1].url).to.be.a('string');
             expect(res.body.urls[1].url).to.match(/http.*/);
+            expect(res.body.urls[1].class).to.be("body");
             expect(res.body.urls[1].headers.range).to.be("bytes=617115-1310236");
             expect(res.body.format).to.be('CRAM');
             expect(res.body.reference).to.be('GRCh37');
@@ -293,6 +357,7 @@ describe("Server", function() {
             expect(res.body.urls[0].url).to.match(/data:.*/);
             let buf = new Buffer(res.body.urls[0].url.substring(res.body.urls[0].url.indexOf(',')+1), 'base64');
             expect(buf.slice(0,4).toString()).to.be('CRAM');
+            expect(res.body.urls[0].class).to.be("header");
 
             expect(res.body.urls[2].url).to.be.a('string');
             expect(res.body.urls[2].url).to.match(/data:.*/);
@@ -300,6 +365,7 @@ describe("Server", function() {
             expect(buf[0]).to.be(0x0f);
             expect(buf[1]).to.be(0x00);
             expect(buf.length).to.be(38);
+            expect(res.body.urls[2].class).to.be("body");
         });
 
         it("should serve the byte range for unmapped reads", function(_) {
@@ -308,6 +374,7 @@ describe("Server", function() {
             expect(res.body.urls.length).to.be(3);
             expect(res.body.urls[1].url).to.be.a('string');
             expect(res.body.urls[1].url).to.match(/http.*/);
+            expect(res.body.urls[1].class).to.be("body");
             expect(res.body.urls[1].headers.range).to.be("bytes=1310237-1661487");
             expect(res.body.format).to.be('CRAM');
             expect(res.body.reference).to.be('GRCh37');
@@ -316,6 +383,7 @@ describe("Server", function() {
             expect(res.body.urls[0].url).to.match(/data:.*/);
             let buf = new Buffer(res.body.urls[0].url.substring(res.body.urls[0].url.indexOf(',')+1), 'base64');
             expect(buf.slice(0,4).toString()).to.be('CRAM');
+            expect(res.body.urls[0].class).to.be("header");
 
             expect(res.body.urls[2].url).to.be.a('string');
             expect(res.body.urls[2].url).to.match(/data:.*/);
@@ -323,6 +391,7 @@ describe("Server", function() {
             expect(buf[0]).to.be(0x0f);
             expect(buf[1]).to.be(0x00);
             expect(buf.length).to.be(38);
+            expect(res.body.urls[2].class).to.be("body");
         });
 
         it("should serve empty result sets", function(_) {
@@ -335,6 +404,7 @@ describe("Server", function() {
             expect(res.body.urls[0].url).to.match(/data:.*/);
             let buf = new Buffer(res.body.urls[0].url.substring(res.body.urls[0].url.indexOf(',')+1), 'base64');
             expect(buf.slice(0,4).toString()).to.be('CRAM');
+            expect(res.body.urls[0].class).to.be("header");
 
             expect(res.body.urls[1].url).to.be.a('string');
             expect(res.body.urls[1].url).to.match(/data:.*/);
@@ -342,6 +412,7 @@ describe("Server", function() {
             expect(buf[0]).to.be(0x0f);
             expect(buf[1]).to.be(0x00);
             expect(buf.length).to.be(38);
+            expect(res.body.urls[1].class).to.be("body");
 
             res = req("/reads/htsnexus_test/NA12878?format=CRAM&referenceName=XXX", _);
             expect(res.statusCode).to.be(200);
@@ -351,6 +422,7 @@ describe("Server", function() {
             expect(res.body.urls[0].url).to.match(/data:.*/);
             buf = new Buffer(res.body.urls[0].url.substring(res.body.urls[0].url.indexOf(',')+1), 'base64');
             expect(buf.slice(0,4).toString()).to.be('CRAM');
+            expect(res.body.urls[0].class).to.be("header");
 
             expect(res.body.urls[1].url).to.be.a('string');
             expect(res.body.urls[1].url).to.match(/data:.*/);
@@ -358,6 +430,7 @@ describe("Server", function() {
             expect(buf[0]).to.be(0x0f);
             expect(buf[1]).to.be(0x00);
             expect(buf.length).to.be(38);
+            expect(res.body.urls[1].class).to.be("body");
         });
     });
 
@@ -370,6 +443,7 @@ describe("Server", function() {
             expect(res.body.urls[0].url).to.be.a('string');
             expect(res.body.urls[0].url).to.match(/http.*/);
             expect(res.body.urls[0].headers.range).to.be("bytes=0-2595858");
+            expect(res.body.urls[0].class).to.be(undefined);
             expect(res.body.format).to.be('VCF');
         });
 
@@ -379,6 +453,7 @@ describe("Server", function() {
             expect(res.body.urls.length).to.be(3);
             expect(res.body.urls[1].url).to.be.a('string');
             expect(res.body.urls[1].url).to.match(/http.*/);
+            expect(res.body.urls[1].class).to.be("body");
             expect(res.body.urls[1].headers.range).to.be("bytes=1853118-2378175");
             expect(res.body.format).to.be('VCF');
             expect(res.body.reference).to.be('GRCh37');
@@ -388,10 +463,42 @@ describe("Server", function() {
             let buf = new Buffer(res.body.urls[0].url.substring(res.body.urls[0].url.indexOf(',')+1), 'base64');
             expect(buf[0]).to.be(0x1f);
             expect(buf[1]).to.be(0x8b);
+            expect(res.body.urls[0].class).to.be("header");
 
             expect(res.body.urls[2].url).to.be.a('string');
             expect(res.body.urls[2].url).to.match(/data:.*/);
             buf = new Buffer(res.body.urls[2].url.substring(res.body.urls[2].url.indexOf(',')+1), 'base64');
+            expect(buf[0]).to.be(0x1f);
+            expect(buf[1]).to.be(0x8b);
+            expect(buf.length).to.be(28);
+            expect(res.body.urls[2].class).to.be("body");
+        });
+
+        it("should suppress VCF header slice prefix on request", function(_) {
+            let res = req("/variants/htsnexus_test/1000genomes?format=VCF&referenceName=22&start=16000000&end=16300000&class=body", _);
+            expect(res.statusCode).to.be(200);
+            expect(res.body.urls.length).to.be(2);
+            expect(res.body.urls[0].url).to.be.a('string');
+            expect(res.body.urls[0].url).to.match(/http.*/);
+            expect(res.body.urls[0].headers.range).to.be("bytes=1853118-2378175");
+            expect(res.body.format).to.be('VCF');
+            expect(res.body.reference).to.be('GRCh37');
+        });
+
+        it("should provide VCF header-only on request", function(_) {
+            let res = req("/variants/htsnexus_test/1000genomes?format=VCF&referenceName=22&start=16000000&end=16300000&class=header", _);
+            expect(res.statusCode).to.be(200);
+            expect(res.body.urls.length).to.be(2);
+            expect(res.body.urls[0].url).to.be.a('string');
+            expect(res.body.urls[0].url).to.match(/data:.*/);
+            let buf = new Buffer(res.body.urls[0].url.substring(res.body.urls[0].url.indexOf(',')+1), 'base64');
+            expect(buf[0]).to.be(0x1f);
+            expect(buf[1]).to.be(0x8b);
+            expect(res.body.urls[0].class).to.be("header");
+            expect(res.body.urls[1].url).to.be.a('string');
+            expect(res.body.urls[1].url).to.match(/data:.*/);
+            expect(res.body.urls[1].class).to.be("body");
+            buf = new Buffer(res.body.urls[1].url.substring(res.body.urls[1].url.indexOf(',')+1), 'base64');
             expect(buf[0]).to.be(0x1f);
             expect(buf[1]).to.be(0x8b);
             expect(buf.length).to.be(28);
@@ -403,6 +510,7 @@ describe("Server", function() {
             expect(res.body.urls.length).to.be(3);
             expect(res.body.urls[1].url).to.be.a('string');
             expect(res.body.urls[1].url).to.match(/http.*/);
+            expect(res.body.urls[1].class).to.be("body");
             expect(res.body.urls[1].headers.range).to.be("bytes=8748-1853761");
             expect(res.body.format).to.be('VCF');
             expect(res.body.reference).to.be('GRCh37');
@@ -412,6 +520,7 @@ describe("Server", function() {
             let buf = new Buffer(res.body.urls[0].url.substring(res.body.urls[0].url.indexOf(',')+1), 'base64');
             expect(buf[0]).to.be(0x1f);
             expect(buf[1]).to.be(0x8b);
+            expect(res.body.urls[0].class).to.be("header");
 
             expect(res.body.urls[2].url).to.be.a('string');
             expect(res.body.urls[2].url).to.match(/data:.*/);
@@ -419,6 +528,7 @@ describe("Server", function() {
             expect(buf[0]).to.be(0x1f);
             expect(buf[1]).to.be(0x8b);
             expect(buf.length).to.be(28);
+            expect(res.body.urls[2].class).to.be("body");
         });
 
         it("should serve empty result sets", function(_) {
@@ -432,9 +542,11 @@ describe("Server", function() {
             let buf = new Buffer(res.body.urls[0].url.substring(res.body.urls[0].url.indexOf(',')+1), 'base64');
             expect(buf[0]).to.be(0x1f);
             expect(buf[1]).to.be(0x8b);
+            expect(res.body.urls[0].class).to.be("header");
 
             expect(res.body.urls[1].url).to.be.a('string');
             expect(res.body.urls[1].url).to.match(/data:.*/);
+            expect(res.body.urls[1].class).to.be("body");
             buf = new Buffer(res.body.urls[1].url.substring(res.body.urls[1].url.indexOf(',')+1), 'base64');
             expect(buf[0]).to.be(0x1f);
             expect(buf[1]).to.be(0x8b);
@@ -449,6 +561,7 @@ describe("Server", function() {
             buf = new Buffer(res.body.urls[0].url.substring(res.body.urls[0].url.indexOf(',')+1), 'base64');
             expect(buf[0]).to.be(0x1f);
             expect(buf[1]).to.be(0x8b);
+            expect(res.body.urls[0].class).to.be("header");
 
             expect(res.body.urls[1].url).to.be.a('string');
             expect(res.body.urls[1].url).to.match(/data:.*/);
@@ -456,6 +569,7 @@ describe("Server", function() {
             expect(buf[0]).to.be(0x1f);
             expect(buf[1]).to.be(0x8b);
             expect(buf.length).to.be(28);
+            expect(res.body.urls[1].class).to.be("body");
         });
     });
 
